@@ -1,0 +1,31 @@
+{
+    "encode": [
+       { "encoding": null, "comment": "default" },
+       { "file": "(?i:.*\\.csv.8859-1)", "encoding": "ISO-8859-1" },
+       { "file": "(?i:.*\\.csv.utf8)",   "encoding": "UTF-8" }
+    ],
+
+    "rename": [
+       { "field": "(?i:Source Of Contact.*)", "to": "Source Of Contact" },
+       { "field": "^(?i:Domain)$", "to": "Domains" },
+       { "field": "\\s+/\\s+", "to": "/" }
+    ],
+
+    "transform": [
+       { "field": "(?i:First Name)", "re": "^(?i:\\s*dr\\.|\\s*prof\\.)+\\s+", "to": "" },
+       { "re": "^\\s+", "to": "" },
+       { "re": "\\s+$", "to": "" }
+    ],
+
+    "validate": [
+       { "field": "(?i:Email)", "type": "email", "log": "warning", "unique": true, "id": "email:1" }
+    ],
+
+    "custom": [
+       { "field": "(?i:Email)", "re": "(?i:ethz\\.ch|epfl\\.ch|unil\\.ch)", "action": "academia_Domains", "id": "academia:1" }
+    ],
+
+    "comment": [
+       { "field": "(?i:Email)", "re": "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9_.-]+\\.[a-zA-Z0-9_.-]+(\\.[a-zA-Z0-9_.-])?$", "log": "warning", "unique": true, "id": "email:1" }
+    ]
+}
