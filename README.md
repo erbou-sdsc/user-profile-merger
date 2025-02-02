@@ -27,13 +27,14 @@ Transformation rules are expressed in the JSON rule file. The rules consist of f
 
 ### Encoding rules
 
-Specify the _encoding_ of files that matches the given regex _file_ pattern.
-Patterns must matches from the start of the file path name.
+Specify the encoding for files that match the given _file_ pattern regex.
+Patterns must match from the beginning of the file path.
+Set _file_ to null to use the default encoding. The _--encoding_ command-line argument takes precedence over the default encoding.
 
 ```
 {
     "encode": [
-       { "encoding": null, "comment": "use null as default to autmatically detect the encoding." },
+       { "encoding": null, "comment": "auto detection" },
        { "file": "(?i:.*\\.utf8)$",   "encoding": "UTF-8" }
     ],
 }
@@ -90,4 +91,5 @@ Actions registered under the _action_ name in the Python code are invoked with t
 ## Notes
 - The tool preserves gmail aliases such as username+tag@gmail.com, however it ignores the +tag when checking for uniqueness.
 - The tool reports duplicates, but does nothing about them
+- Once records are merged, the source information of the original records is lost.
 - We frequently receive input files that combine records from multiple sources, all merged under a single encoding. As a result, records created with different encodings may appear garbled. The tool attempts to automatically correct these encoding issues, but this process is ad-hoc and has not been thoroughly tested with all possible encoding combinations.

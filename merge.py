@@ -2,6 +2,7 @@
 
 import argparse
 import csv
+import configparser
 import json
 import logging
 import os
@@ -118,22 +119,33 @@ if __name__ == "__main__":
     parser.add_argument('--config', '-c', metavar='config', type=pathlib.Path, default='config.ini', help='configuration INI file')
     parser.add_argument('--list', '-f',  metavar='files', type=str, nargs='+', help='csv files')
     parser.add_argument('--encoding', '-e', metavar='code', type=str, help='encoding')
-    parser.add_argument('--rules', '-r', metavar='file', type=pathlib.Path, nargs='+', default=[], help='conversion rules')
+    parser.add_argument('--rules', '-r', metavar='file', type=pathlib.Path, help='conversion rules')
     parser.add_argument('--out', '-o', metavar='file', type=pathlib.Path, help='output file')
-    parser.add_argument('--log', '-v', metavar='level', choices=['debug', 'info', 'warn', 'error', 'critical'], default='info', help='log level')
+    parser.add_argument('--loglevel', '-v', metavar='level', choices=['debug', 'info', 'warning', 'error', 'critical'], default='info', help='log level')
     parser.add_argument('--logfile', '-O', metavar='file', type=pathlib.Path, help='log file')
     args = parser.parse_args()
+
+    default_section = (args.config.name.split(':')[1:] or ['DEFAULT'])[0]
+    config = configparser.ConfigParser(default_section=default_section)
+    config_path = pathlib.Path().joinpath(args.config.parent, args.config.name.split(':')[0])
+    config.read(config_path)
+
+    for k in config[default_section]:
+        if not hasattr(args, k) or getattr(args, k) is None:
+            setattr(args, k, config[default_section][k])
 
     logger = logging.getLogger(__name__)
     if args.logfile is not None:
         logging.basicConfig(filename=args.logfile, filemode='w', format='%(asctime)s %(levelname)s %(message)s', encoding='utf-8', level=logging.INFO)
     else:
         logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', encoding='utf-8', level=logging.INFO)
-    logger.setLevel(args.log.upper())
+    logger.setLevel(args.loglevel.upper())
 
-    for r in args.rules:
-        with open(r, 'r') as ruleset:
+    if args.rules is not None:
+        with open(args.rules, 'r') as ruleset:
             rules = json.load(ruleset)
+    else:
+        rules = {}
 
     ## Merge the column names from all files
     ## rename the columns according to the rules
