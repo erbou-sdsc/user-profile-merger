@@ -13,12 +13,17 @@
 
     "transform": [
        { "field": "(?i:First Name)", "re": "^(?i:\\s*dr\\.|\\s*prof\\.)+\\s+", "to": "" },
+       { "field": "(?i:tags)", "add": "@.INPUT_TAG" },
        { "re": "^\\s+", "to": "" },
        { "re": "\\s+$", "to": "" }
     ],
 
     "validate": [
-       { "field": "(?i:Email)", "type": "email", "log": "warning", "unique": true, "id": "email:1" }
+       { "field": "(?i:Email)", "type": "email", "log": "warning", "unique": true, "action": "email_Violation", "id": "email:1" }
+    ],
+
+    "report": [
+       { "field": "(?i:tags)", "stats": [ "unique" ] }
     ],
 
     "custom": [
@@ -26,6 +31,6 @@
     ],
 
     "comment": [
-       { "field": "(?i:Email)", "re": "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9_.-]+\\.[a-zA-Z0-9_.-]+(\\.[a-zA-Z0-9_.-])?$", "log": "warning", "unique": true, "id": "email:1" }
+       { "field": "(?i:Email)", "re": "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9_.-]+\\.[a-zA-Z0-9_.-]+(\\.[a-zA-Z0-9_.-])?$", "log": "warning", "unique": true, "action": "email_violation", "id": "email:1" }
     ]
 }

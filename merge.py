@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import argparse
-import csv
 import configparser
+import csv
 import json
 import logging
 import os
@@ -11,7 +11,23 @@ import re
 import sqlite3
 import sys
 
+from collections import defaultdict
 
+# Report
+class Report:
+    def __auto_dict(self):
+        return defaultdict(self.__auto_dict)
+
+    def __init__(self):
+        self.obj = self.__auto_dict()
+        self.unique = defaultdict(set)
+
+    def addUnique(self, field, value):
+        self.unique[field].add(value)
+
+    def print(self):
+        for k,v in reports.unique.items(): 
+            logger.info(f'UNIQUE IN FIELD {k}: {v}')
 
 # Decorator to register functions into a lookup table
 class FunctionRegistry:
@@ -39,6 +55,16 @@ def academia_Domains(output):
     if domains != output['Domains']:
         logger.info(f'Action: {output["Email Address"]} {output["Domains"]} -> {domains}')
     output['Domains'] = domains
+
+def splitCell(cell):
+    return next(csv.reader([cell], skipinitialspace=True))
+
+def getFileAndTag(filename):
+    qf = filename.strip().split(':')
+    if len(qf) > 1:
+        return qf[0].strip(),qf[1].strip()
+    else:
+        return filename,None
 
 ## Open a file from path or duplicate a file descriptor (e.g. stdout)
 def open_file(f, **kwargs):
@@ -76,8 +102,8 @@ def merge_list(a, b):
         
     return merged_list
 
-## Validate value based on type and return True/False result of validation and
-## a canonic value that can be used to check for the unique constraint.
+## Validate value based on type (email, ...) and return True/False result of validation and
+## a canonic form of the value that can be used to check for the unique constraint.
 ##
 def validateValue(value, isa):
     match (isa or '').lower():
@@ -117,8 +143,9 @@ def detect_encoding(f, rules, args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Merge MailChimp lists.')
     parser.add_argument('--config', '-c', metavar='config', type=pathlib.Path, default='config.ini', help='configuration INI file')
-    parser.add_argument('--list', '-f',  metavar='files', type=str, nargs='+', help='csv files')
-    parser.add_argument('--encoding', '-e', metavar='code', type=str, help='encoding')
+    parser.add_argument('--list', '-f',  metavar='files', type=str, nargs='+', help='csv files - filename[:tag], if tag is provided it is added to the TAGS column')
+    parser.add_argument('--encoding', '-e', metavar='code', type=str, help='default input encoding')
+    parser.add_argument('--o_encoding', '-x', metavar='code', type=str, default=None, help='output encoding')
     parser.add_argument('--rules', '-r', metavar='file', type=pathlib.Path, help='conversion rules')
     parser.add_argument('--out', '-o', metavar='file', type=pathlib.Path, help='output file')
     parser.add_argument('--loglevel', '-v', metavar='level', choices=['debug', 'info', 'warning', 'error', 'critical'], default='info', help='log level')
@@ -133,6 +160,7 @@ if __name__ == "__main__":
     for k in config[default_section]:
         if not hasattr(args, k) or getattr(args, k) is None:
             setattr(args, k, config[default_section][k])
+    args.o_encoding = (args.o_encoding or config.get('DEFAULT', 'o_encoding', fallback=None) or 'utf-8-sig').lower()
 
     logger = logging.getLogger(__name__)
     if args.logfile is not None:
@@ -154,13 +182,15 @@ if __name__ == "__main__":
     logger.info(f'ITERATION 1 -- Merge headers')
     column_map = dict()
     fieldnames = []
+    reports = Report()
     for f in args.list:
+        f,file_tag = getFileAndTag(f)
         try:
             if args.out is not None and os.path.samefile(f, args.out):
                 continue
         except:
             pass
-        logger.info(f'FILE {f}')
+        logger.info(f'FILE {f} tag:{file_tag}')
         encoding = detect_encoding(f, rules, args)
 
         with open(f, 'r', encoding = encoding, newline='') as file:
@@ -193,14 +223,15 @@ if __name__ == "__main__":
     ##
     logger.info(f'ITERATION 2 -- Merge rows')
     unique_idx = dict()
-    with open_file(args.out or sys.stdout.fileno(), mode='w', newline='') as csvfile:
+    with open_file(args.out or sys.stdout.fileno(), mode='w', newline='', encoding=args.o_encoding) as csvfile:
         csvwriter = csv.DictWriter(csvfile, fieldnames=fieldnames)
         csvwriter.writeheader()
 
         for f in args.list:
+            f,file_tag = getFileAndTag(f)
             if args.out is not None and os.path.samefile(f, args.out):
                 continue
-            logger.info(f'FILE {f}')
+            logger.info(f'FILE {f} tag:{file_tag}')
             encoding = detect_encoding(f, rules, args)
     
             with open(f, 'r', encoding = encoding, newline='') as file:
@@ -228,12 +259,27 @@ if __name__ == "__main__":
                                    except (UnicodeDecodeError, TypeError):
                                        logger.warning(f'Re-encoding failed for `{value}`')
 
-                        # Replace field values according to regex rules
+                        # Transform field values according to regex rules
                         for r in rules.get('transform', []):
                             if r.get('field') is None or re.match(r.get('field'), renamed_field):
-                                value = re.sub(r['re'], r['to'], value)
+                                if r.get('re'):
+                                    value = re.sub(r['re'], r['to'], value)
+                                if r.get('field') and (add_elem := r.get('add')) and add_elem:
+                                    valueList=set(splitCell(value))
+                                    if add_elem == '@.INPUT_TAG' and file_tag:
+                                        add_elem = file_tag
+                                    if not add_elem.startswith('@.'):
+                                        valueList.add(add_elem)
+                                    value = ','.join(['"'+x.strip(' "')+'"' for x in valueList])
                         if value != row[field]:
-                            logger.debug(f'Transform `{row[field]}` to `{value}`')
+                            logger.info(f'Transform {field} `{row[field]}` to `{value}`')
+
+                        # Create reports
+                        for r in rules.get('report', []):
+                            if (f := r.get('field')) and f is not None and re.match(f, renamed_field) and (s := r.get('stats')) and s:
+                                if 'unique' in s:
+                                    for vv in set(splitCell(value)):
+                                        reports.addUnique(renamed_field, vv.strip(' "'))
     
                         # Validate field values according to regex rules
                         for r in rules.get('validate', []):
@@ -261,7 +307,7 @@ if __name__ == "__main__":
                             if r.get('field') is None or re.match(r.get('field'), renamed_field):
                                 if r.get('re') is None or re.search(r.get('re'), value):
                                     action_set |= set([r['action']])
-    
+
                         logger.debug(f'{renamed_field}={value}')
                         output[renamed_field] = value
 
@@ -271,3 +317,5 @@ if __name__ == "__main__":
                     logger.debug(f'INPUT: {row}')
                     logger.debug(f'OUTPUT: {output}')
                     csvwriter.writerow(output)
+
+    reports.print()
