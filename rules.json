@@ -19,7 +19,7 @@
     ],
 
     "validate": [
-       { "field": "(?i:Email)", "type": "email", "log": "warning", "unique": true, "action": "email_Violation", "id": "email:1" }
+       { "field": "(?i:Email)", "type": "email", "log": "warning", "unique": true, "id": "email:1" }
     ],
 
     "report": [
